@@ -5,9 +5,9 @@
 
 A `net.Dialer.DialContext` replacement with deterministic DNS resolution strategies.
 
-Bypass your system's DNS resolver entirely and query multiple recursive resolvers directly. Implement concurrent races for minimum latency, consensus validation for cache poisoning detection, or ordered fallback for resolver diversity. Built on [miekg/dns](https://pkg.go.dev/github.com/miekg/dns) with sub-resolver control over timeout behavior, retry logic, and response validation.
+Implement concurrent races for minimum latency, consensus validation for poisoning detection, or ordered fallback for resolver diversity. Built on [miekg/dns](https://pkg.go.dev/github.com/miekg/dns) with sub-resolver control over timeout behavior, retry logic, and response validation.
 
-Essential for systems where DNS resolution latency impacts P99 response times and DNS failures cascade into service outages. Drop into any `DialContext` call in HTTP transports, gRPC clients, or custom connection pools.
+Useful for systems where DNS resolution latency impacts P99 response times and DNS failures cascade into service outages. Drop into any `DialContext` call in HTTP transports, gRPC clients, or custom connection pools.
 
 ## How it works
 
