@@ -22,6 +22,22 @@ Built on [miekg/dns](https://pkg.go.dev/github.com/miekg/dns), dnsdialer impleme
 
 The only difference: instead of using your system DNS resolver, it queries multiple DNS servers using your chosen strategy.
 
+## Performance
+
+The standard library's net.Dialer relies on OS-level DNS caching (mDNSResponder on macOS, systemd-resolved on Linux), which provides sub-millisecond lookups once cached. dnsdialer has its own in-process LRU cache to avoid shared global state and maintain explicit control over TTL bounds. By caching parsed [net.IP](https://pkg.go.dev/net#IP) slices instead of raw DNS strings, you get similar dial latency with reduced per-lookup allocations.
+
+```console
+go test -bench='^BenchmarkStdLib_DialContext$|^BenchmarkDNSDialer_DialContext_Cache_Single_Race$' -benchtime=5s -benchmem -run=^$
+goos: darwin
+goarch: arm64
+pkg: github.com/bschaatsbergen/dnsdialer
+cpu: Apple M4
+BenchmarkStdLib_DialContext-10                               360          16735385 ns/op            3549 B/op         57 allocs/op
+BenchmarkDNSDialer_DialContext_Cache_Single_Race-10          354          16519391 ns/op             936 B/op         21 allocs/op
+PASS
+ok      github.com/bschaatsbergen/dnsdialer     12.114s
+```
+
 ## Usage
 
 ### HTTP Client
