@@ -15,40 +15,40 @@ import (
 // Concurrency: The pool is safe for concurrent access. Multiple goroutines can
 // Get and Put connections simultaneously.
 type connPool struct {
-	// addr is the DNS server address (e.g., "8.8.8.8:53")
+	// addr is the DNS server address we're pooling connections for (e.g., "8.8.8.8:53")
 	addr string
 
 	// timeout is the connection timeout for creating new connections
 	timeout time.Duration
 
-	// size is the maximum number of pooled connections
+	// size is the maximum number of pooled connections we'll keep around
 	size int
 
 	// conns is a buffered channel acting as a LIFO queue of available connections
 	conns chan *net.UDPConn
 
-	// mu protects the 'closed' flag
+	// mu protects the 'closed' flag, we don't want races when closing
 	mu sync.Mutex
 
-	// closed is set to true when pool is closed; prevents new Gets
+	// closed is set to true when pool is closed, prevents new Gets from working
 	closed bool
 
-	// dialer is used for creating new connections
+	// dialer is used for creating new connections, reuse it instead of allocating each time
 	dialer *net.Dialer
 }
 
 func newConnPool(addr string, timeout time.Duration, size int) *connPool {
 	if size <= 0 {
-		size = 4 // default pool size - chosen as a reasonable balance between connection reuse and resource usage
+		size = 4 // default pool size, reasonable balance between connection reuse and resource usage
 	}
 
 	pool := &connPool{
 		addr:    addr,
 		timeout: timeout,
 		size:    size,
-		// Buffered channel of size 'size' acts as a queue. The channel buffer size
-		// limits how many connections we'll keep idle. When the channel is full,
-		// Put() will close excess connections rather than blocking.
+		// Buffered channel of size 'size' acts as a queue. The channel buffer size is what
+		// limits how many connections we'll keep idle. When the channel is full, Put() will
+		// just close excess connections rather than blocking.
 		conns: make(chan *net.UDPConn, size),
 		dialer: &net.Dialer{
 			Timeout: timeout,
@@ -71,13 +71,13 @@ func (p *connPool) Get() (*net.UDPConn, error) {
 	}
 	p.mu.Unlock()
 
-	// Try to get an idle connection from the pool (non-blocking).
-	// Using select with default makes this a non-blocking receive: if a connection
-	// is available, use it; otherwise fall through to create a new one.
+	// Try to get an idle connection from the pool. Using select with default makes this
+	// a non-blocking receive: if a connection is available, grab it; otherwise fall through
+	// to create a new one.
 	select {
 	case conn := <-p.conns:
 		// Got a connection from the pool. In theory it should be valid, but we check
-		// anyway in case something unexpected happened (shouldn't be nil in practice).
+		// anyway in case something unexpected happened, shouldn't be nil in practice.
 		if conn != nil {
 			return conn, nil
 		}
@@ -89,8 +89,8 @@ func (p *connPool) Get() (*net.UDPConn, error) {
 		// Fall through to create a new connection.
 	}
 
-	// Create a new connection. Note that we don't enforce the pool size limit here -
-	// we can temporarily have more than 'size' connections in flight. The limit is
+	// Create a new connection. Note that we don't enforce the pool size limit here,
+	// we can temporarily have more than 'size' connections in flight. The limit is really
 	// enforced by Put(), which will close connections when the pool is full.
 	raddr, err := net.ResolveUDPAddr("udp", p.addr)
 	if err != nil {
@@ -117,28 +117,28 @@ func (p *connPool) Put(conn *net.UDPConn) {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
-		// Pool is closed, so don't return the connection to it. Close immediately.
-		// The blank identifier assignment silences linter warnings about unchecked errors.
-		// We can't do anything meaningful with Close() errors here anyway.
+		// Pool is closed, so don't return the connection to it. Just close it immediately.
+		// The blank identifier assignment silences linter warnings about unchecked errors,
+		// we can't do anything meaningful with Close() errors here anyway.
 		_ = conn.Close()
 		return
 	}
 	p.mu.Unlock()
 
-	// Try to return the connection to the pool (non-blocking).
-	// If successful, the connection becomes available for the next Get() call.
+	// Try to return the connection to the pool. If successful, the connection becomes
+	// available for the next Get() call.
 	select {
 	case p.conns <- conn:
 		// Successfully queued the connection for reuse. The connection stays open
 		// and will be returned by a future Get() call.
 	default:
 		// Pool is full. This happens when more than 'size' connections were created
-		// (allowed during high load) and are now being returned. Rather than blocking
-		// or growing the pool unbounded, we close excess connections.
+		// during high load and are now being returned. Rather than blocking or growing
+		// the pool unbounded, we just close excess connections.
 		//
 		// This is a key part of the pool's self-regulation: it can temporarily exceed
 		// its size limit during load spikes, but will shrink back down as connections
-		// are returned.
+		// get returned.
 		_ = conn.Close()
 	}
 }
@@ -161,13 +161,13 @@ func (p *connPool) Close() error {
 	}
 
 	p.closed = true
-	// Closing the channel signals that no more connections will be added.
-	// This also allows the range loop below to terminate once all queued
-	// connections have been processed.
+	// Closing the channel signals that no more connections will be added. This also
+	// allows the range loop below to terminate once all queued connections have been
+	// processed.
 	close(p.conns)
 
-	// Drain and close all idle connections in the pool.
-	// The range terminates when the channel is both closed and empty.
+	// Drain and close all idle connections in the pool. The range terminates when
+	// the channel is both closed and empty.
 	for conn := range p.conns {
 		if conn != nil {
 			_ = conn.Close()

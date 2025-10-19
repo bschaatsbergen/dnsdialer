@@ -23,10 +23,10 @@ func (s Race) ResolveType(ctx context.Context, host string, qtype RecordType, re
 	// when sending results, even if we've already returned to the caller.
 	results := make(chan result, len(resolvers))
 
-	// Launch all queries simultaneously. The idea is to leverage the fastest
-	// available resolver - whichever responds first wins. This minimizes latency
-	// at the cost of increased network traffic (all servers are queried even though
-	// only one response is used).
+	// Launch all queries simultaneously. The idea here is to leverage whichever
+	// resolver is fastest, whoever responds first wins. This minimizes latency
+	// at the cost of increased network traffic, all servers get queried even though
+	// we only use one response.
 	for _, res := range resolvers {
 		go func(r resolver) {
 			start := time.Now()
@@ -40,7 +40,7 @@ func (s Race) ResolveType(ctx context.Context, host string, qtype RecordType, re
 		}(res)
 	}
 
-	// Return the first successful response. We must wait for all resolvers to
+	// Return the first successful response. We have to wait for all resolvers to
 	// either succeed or fail before giving up, since early failures from fast-but-broken
 	// resolvers shouldn't prevent us from getting results from slower-but-working ones.
 	var lastErr error
@@ -51,17 +51,17 @@ func (s Race) ResolveType(ctx context.Context, host string, qtype RecordType, re
 				Field{"resolver", r.resolver},
 				Field{"latency", r.latency},
 				Field{"type", qtype.String()})
-			// Cancel outstanding queries to avoid wasting resources.
-			// Note: UDP queries may have already been sent, but this prevents
-			// waiting for responses we don't need.
+			// Cancel outstanding queries to avoid wasting resources. Note: UDP queries
+			// may have already been sent, but this at least prevents us from waiting
+			// for responses we don't need anymore.
 			cancel()
 			return r.records, nil
 		}
 		lastErr = r.err
 	}
 
-	// All resolvers failed. Return the last error encountered.
-	// Note: In a production system, you might want to aggregate all errors
-	// to help diagnose whether one resolver is down vs. the domain doesn't exist.
+	// All resolvers failed. Return the last error we encountered. In a production
+	// system, you might want to aggregate all errors to help diagnose whether one
+	// resolver is down vs. the domain doesn't exist.
 	return nil, lastErr
 }

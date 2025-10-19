@@ -9,7 +9,8 @@ import (
 )
 
 // ipCacheEntry holds cached IP addresses with their expiration time. We cache the
-// already-parsed net.IP values to skip the net.ParseIP overhead on every cache hit.
+// already-parsed net.IP values here so we can skip the net.ParseIP overhead on every
+// cache hit, which saves a surprising amount of time.
 type ipCacheEntry struct {
 	ips       []net.IP
 	expiresAt time.Time
@@ -28,13 +29,12 @@ type dnsCache struct {
 	mu      sync.RWMutex
 	enabled bool
 
-	// minTTL prevents caching entries with very short TTLs that would thrash the cache.
-	// For example, setting this to 1s means we won't cache a record with TTL=0.
+	// minTTL prevents caching entries with very short TTLs that would just thrash the cache.
+	// For example, setting this to 1s means we won't bother caching a record with TTL=0.
 	minTTL time.Duration
 
-	// maxTTL caps how long we'll cache an entry regardless of what the DNS server says.
-	// This ensures we periodically re-validate even if the server sends a high TTL.
-	// Setting this to 5 minutes means we'll re-query at least that often.
+	// maxTTL caps how long we'll cache an entry, regardless of what the DNS server tells us.
+	// This ensures we periodically re-validate even if the server sends a very high TTL.
 	maxTTL time.Duration
 }
 
@@ -48,7 +48,7 @@ func newDNSCache(size int, minTTL, maxTTL time.Duration) *dnsCache {
 	}
 
 	// Create LRU cache for IP addresses. The golang-lru library handles eviction
-	// and basic TTL tracking, but we also check expiration manually in getIPs()
+	// and basic TTL tracking for us, but we also check expiration manually in getIPs()
 	// since we want to respect DNS TTLs from individual records.
 	ipCache := lru.NewLRU[string, *ipCacheEntry](size, nil, maxTTL)
 
@@ -77,28 +77,28 @@ func (c *dnsCache) getIPs(host string) []net.IP {
 		return nil
 	}
 
-	// Same expiration logic as the record cache - don't remove, just return nil
-	// to signal a cache miss.
+	// Same expiration logic as the record cache, don't bother removing it, just return
+	// nil to signal a cache miss. The LRU will evict it eventually.
 	if entry.isExpired() {
 		return nil
 	}
 
-	// Return a copy to prevent caller from modifying cached data. net.IP is a slice
-	// so we need to copy the slice, not just the individual IP values.
+	// Return a copy to prevent the caller from modifying our cached data. net.IP is a
+	// slice, so we need to copy the slice itself, not just the individual IP values.
 	ips := make([]net.IP, len(entry.ips))
 	copy(ips, entry.ips)
 	return ips
 }
 
 // setIPs stores already-parsed IP addresses in the cache with TTL-based expiration.
-// The TTL is passed in from the caller who has already determined the minimum TTL
+// The TTL is passed in from the caller who has already figured out the minimum TTL
 // from the DNS response records. We just need to clamp it to our configured bounds.
 func (c *dnsCache) setIPs(host string, ips []net.IP, ttl time.Duration) {
 	if !c.enabled || len(ips) == 0 {
 		return
 	}
 
-	// Clamp TTL to configured bounds.
+	// Clamp TTL to our configured bounds, don't trust DNS servers too much.
 	if ttl < c.minTTL {
 		ttl = c.minTTL
 	}

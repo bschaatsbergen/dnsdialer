@@ -6,8 +6,8 @@ import (
 )
 
 func (s Consensus) ResolveType(ctx context.Context, host string, qtype RecordType, resolvers []resolver, logger Logger) ([]Record, error) {
-	// Default to simple majority if not specified. For 3 resolvers, need 2 to agree.
-	// For 4 resolvers, need 3. This provides Byzantine fault tolerance assuming
+	// Default to simple majority if not specified. For 3 resolvers, we need 2 to agree.
+	// For 4 resolvers, we need 3. This provides Byzantine fault tolerance, assuming
 	// at most (n-1)/2 resolvers are compromised or malfunctioning.
 	if s.MinAgreement <= 0 {
 		s.MinAgreement = (len(resolvers) / 2) + 1
@@ -21,19 +21,19 @@ func (s Consensus) ResolveType(ctx context.Context, host string, qtype RecordTyp
 	var groups []resultGroup
 
 	// Query all resolvers and group responses by equality. We don't race or short-circuit
-	// because we need to collect enough responses to reach consensus. This is inherently
-	// slower than Race but provides security against DNS poisoning or compromised resolvers.
+	// here because we need to collect enough responses to reach consensus. This is inherently
+	// slower than Race but gives us security against DNS poisoning or compromised resolvers.
 	for _, res := range resolvers {
 		records, err := res.ResolveType(ctx, host, qtype)
 		if err != nil {
 			// Skip failed queries. Note that if too many fail, we won't reach consensus.
 			// For example, with 3 resolvers and MinAgreement=2, if one fails we can still
-			// succeed if the other 2 agree. But if 2 fail, we'll always fail to reach consensus.
+			// succeed if the other 2 agree. But if 2 fail, we'll always fail.
 			continue
 		}
 
 		// Check if these records match any existing group. Records are considered equal
-		// if they contain the same values (and optionally same TTLs, depending on IgnoreTTL).
+		// if they contain the same values, and optionally same TTLs depending on IgnoreTTL.
 		matched := false
 		for i := range groups {
 			if recordsEqual(groups[i].records, records, s.IgnoreTTL) {
@@ -43,9 +43,9 @@ func (s Consensus) ResolveType(ctx context.Context, host string, qtype RecordTyp
 			}
 		}
 
-		// No matching group found, create a new one. This happens when a resolver
-		// returns different data (could indicate DNS poisoning, misconfiguration,
-		// or normal DNS propagation delay).
+		// No matching group found, so create a new one. This happens when a resolver
+		// returns different data, could indicate DNS poisoning, misconfiguration,
+		// or just normal DNS propagation delay.
 		if !matched {
 			groups = append(groups, resultGroup{
 				records: records,
@@ -54,9 +54,8 @@ func (s Consensus) ResolveType(ctx context.Context, host string, qtype RecordTyp
 		}
 	}
 
-	// Return the first group that has sufficient agreement. If multiple groups
-	// reach the threshold (shouldn't happen with proper MinAgreement setting),
-	// we return the first one encountered.
+	// Return the first group that has sufficient agreement. If multiple groups somehow
+	// reach the threshold, we just return the first one we encounter.
 	for _, group := range groups {
 		if group.count >= s.MinAgreement {
 			logger.Debug("consensus reached",

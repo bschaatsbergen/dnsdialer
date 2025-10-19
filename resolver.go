@@ -27,25 +27,25 @@ type resolver interface {
 // enabling improved reliability, performance, or security compared to single-resolver
 // approaches.
 type Dialer struct {
-	// resolvers is the list of DNS servers to query (e.g., UDP resolvers for 8.8.8.8, 1.1.1.1)
+	// resolvers is the list of DNS servers we'll query (e.g., UDP resolvers for 8.8.8.8, 1.1.1.1)
 	resolvers []resolver
 
-	// strategy determines how to coordinate queries (Race, Fallback, Consensus, Compare)
+	// strategy determines how we coordinate queries (Race, Fallback, Consensus, Compare)
 	strategy Strategy
 
-	// timeout is the per-query timeout applied to individual DNS queries
+	// timeout is the per-query timeout we apply to individual DNS queries
 	timeout time.Duration
 
-	// logger is the structured logging interface (no-op by default)
+	// logger is the structured logging interface, no-op by default so zero overhead if you don't need it
 	logger Logger
 
-	// poolSize is the max connections to pool per resolver (defaults to 4)
+	// poolSize is the max connections to pool per resolver, defaults to 4
 	poolSize int
 
-	// dialer is reused for TCP/UDP connections
+	// dialer is reused for TCP/UDP connections to avoid allocating a new one each time
 	dialer *net.Dialer
 
-	// cache stores DNS lookup results with TTL-based expiration
+	// cache stores DNS lookup results with TTL-based expiration, disabled by default
 	cache *dnsCache
 }
 
@@ -119,14 +119,14 @@ func (r *Dialer) lookup(ctx context.Context, host string) ([]Record, error) {
 		qtype   RecordType
 	}
 
-	// Buffered channel prevents goroutines from blocking if we return early.
-	// Size matches query count so all goroutines can always send their result.
+	// Buffered channel prevents goroutines from blocking if we return early. We size it
+	// to match query count so all goroutines can always send their result without waiting.
 	results := make(chan result, len(queryTypes))
 
-	// Query all record types concurrently. For example, if querying both A and AAAA,
-	// we don't want to wait for A to complete before starting AAAA. This can
-	// significantly reduce total query time when using strategies like Fallback
-	// that may need to try multiple resolvers sequentially per type.
+	// Query all record types concurrently. For example, if we're querying both A and AAAA,
+	// we don't want to sit around waiting for A to complete before starting AAAA. This can
+	// significantly reduce total query time, especially when using strategies like Fallback
+	// that might need to try multiple resolvers sequentially per type.
 	for _, qtype := range queryTypes {
 		go func(qt RecordType) {
 			records, err := r.strategy.ResolveType(ctx, host, qt, r.resolvers, r.logger)
@@ -139,15 +139,15 @@ func (r *Dialer) lookup(ctx context.Context, host string) ([]Record, error) {
 	}
 
 	// Collect all results, even if some queries fail. We take a best-effort
-	// approach: if A records fail but AAAA succeeds, return the AAAA records.
-	// Pre-allocate assuming ~4 records per type (heuristic for typical responses).
+	// approach here: if A records fail but AAAA succeeds, we'll return the AAAA records.
+	// Pre-allocate assuming ~4 records per type, just a heuristic based on typical responses.
 	allRecords := make([]Record, 0, len(queryTypes)*4)
 	for i := 0; i < len(queryTypes); i++ {
 		res := <-results
 		if res.err != nil {
-			// Don't fail the entire lookup if one record type fails.
-			// For example, a host might have A records but no AAAA records,
-			// which some DNS servers report as an error rather than empty result.
+			// Don't fail the entire lookup if one record type fails. For example, a host
+			// might have A records but no AAAA records, and some DNS servers report that
+			// as an error rather than an empty result.
 			r.logger.Debug("query type failed",
 				Field{"type", res.qtype.String()},
 				Field{"error", res.err.Error()})
@@ -161,7 +161,7 @@ func (r *Dialer) lookup(ctx context.Context, host string) ([]Record, error) {
 
 // lookupIPs extracts IP addresses from DNS records.
 func (r *Dialer) lookupIPs(ctx context.Context, host string) ([]net.IP, error) {
-	// Fast path: check IP cache first (avoids string parsing)
+	// Fast path: check IP cache first, saves us from parsing strings each time
 	if cached := r.cache.getIPs(host); cached != nil {
 		r.logger.Debug("IP cache hit",
 			Field{"host", host},
@@ -172,23 +172,23 @@ func (r *Dialer) lookupIPs(ctx context.Context, host string) ([]net.IP, error) {
 	r.logger.Debug("IP cache miss",
 		Field{"host", host})
 
-	// Cache miss - perform DNS lookup
+	// Cache miss - time to do the actual DNS lookup
 	records, err := r.lookup(ctx, host)
 	if err != nil {
 		return nil, err
 	}
 
-	// Extract IPs and find minimum TTL for caching
+	// Extract IPs and find minimum TTL for caching, we need to honor the lowest one
 	ips := make([]net.IP, 0, len(records))
-	minTTL := uint32(300) // Default 5 minutes if no TTL found
+	minTTL := uint32(300) // Default 5 minutes if we don't find a TTL, shouldn't happen in practice
 
 	for _, record := range records {
-		// Only extract IP addresses from A and AAAA records
+		// Only extract IP addresses from A and AAAA records, ignore CNAME, MX, etc.
 		if record.Type == TypeA || record.Type == TypeAAAA {
 			ip := net.ParseIP(record.Value)
 			if ip != nil {
 				ips = append(ips, ip)
-				// Track minimum TTL for cache expiration
+				// Track minimum TTL for cache expiration, we use the shortest one to be safe
 				if record.TTL < minTTL {
 					minTTL = record.TTL
 				}
@@ -200,7 +200,7 @@ func (r *Dialer) lookupIPs(ctx context.Context, host string) ([]net.IP, error) {
 		return nil, fmt.Errorf("no IP addresses found for %s", host)
 	}
 
-	// Cache the IPs for future lookups (bypasses string parsing overhead)
+	// Cache the IPs for future lookups so we can skip the parsing overhead next time
 	r.cache.setIPs(host, ips, time.Duration(minTTL)*time.Second)
 
 	return ips, nil
@@ -226,18 +226,19 @@ func (r *Dialer) lookupIPs(ctx context.Context, host string) ([]net.IP, error) {
 //	// Custom usage
 //	conn, err := dialer.DialContext(ctx, "tcp", "api.github.com:443")
 func (r *Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	// Split addr into host and port
+	// Split addr into host and port (standard net package format)
 	host, portStr, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid address %q: %w", addr, err)
 	}
 
-	// If host is already an IP address, use it directly without DNS lookup.
+	// If host is already an IP address, use it directly without DNS lookup. No point
+	// in doing DNS resolution for something that's already an IP.
 	if ip := net.ParseIP(host); ip != nil {
 		return r.dialer.DialContext(ctx, network, addr)
 	}
 
-	// Perform DNS lookup using the configured strategy
+	// Perform DNS lookup using whichever strategy is configured
 	ips, err := r.lookupIPs(ctx, host)
 	if err != nil {
 		return nil, fmt.Errorf("DNS lookup failed for %s: %w", host, err)
@@ -247,21 +248,22 @@ func (r *Dialer) DialContext(ctx context.Context, network, addr string) (net.Con
 	var filteredIPs []net.IP
 	switch network {
 	case "tcp4", "udp4":
-		// Only use IPv4 addresses
+		// Only use IPv4 addresses, the caller explicitly asked for v4
 		for _, ip := range ips {
 			if ip.To4() != nil {
 				filteredIPs = append(filteredIPs, ip)
 			}
 		}
 	case "tcp6", "udp6":
-		// Only use IPv6 addresses
+		// Only use IPv6 addresses, the caller explicitly asked for v6
 		for _, ip := range ips {
 			if ip.To4() == nil && ip.To16() != nil {
 				filteredIPs = append(filteredIPs, ip)
 			}
 		}
 	default:
-		// For "tcp" and "udp", use all IPs. Try IPv4 first for compatibility.
+		// For "tcp" and "udp", use all IPs we got. Try IPv4 first for better compatibility,
+		// more things support IPv4 than IPv6 in practice.
 		filteredIPs = make([]net.IP, 0, len(ips))
 		// Add IPv4 addresses first
 		for _, ip := range ips {
