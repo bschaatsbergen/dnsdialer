@@ -12,6 +12,8 @@ Why you'd want multiple resolvers: Redundancy (primary resolver failure doesn't 
 
 Most OS-level DNS stacks already support multiple resolvers, but they don't use them in parallel, they typically try the first, then fail over in sequence (which can be slow if the first resolver hangs). In high-throughput systems where single-digit millisecond DNS latency affects tail latencies and resolver failures propagate into cascading outages, you need deterministic multi-resolver behavior.
 
+While OS-level DNS caching (mDNSResponder on macOS, systemd-resolved on Linux) provides fast lookups, this package currently does not leverage OS caching. This package currently queries resolvers directly without caching. An LRU cache implementation is in progress.
+
 This package provides a `DialContext` implementation that plugs directly into HTTP transports, gRPC clients, or any custom connection pools expecting [`net.Dialer`](https://pkg.go.dev/net#Dialer).
 
 ## How it works
