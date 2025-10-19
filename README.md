@@ -14,17 +14,17 @@ Most OS-level DNS stacks already support multiple resolvers, but they don't use 
 
 While OS-level DNS caching (mDNSResponder on macOS, systemd-resolved on Linux) provides sub-millisecond lookups, this package bypasses it by default to ensure fresh results for redundancy and consensus validation. Optional LRU caching with TTL-aware expiration is available via `WithCache()` to reduce latency on repeated lookups while maintaining explicit control over cache size and TTL bounds.
 
-This package provides a `DialContext` implementation that plugs directly into HTTP transports, gRPC clients, or any custom connection pools expecting [`net.Dialer`](https://pkg.go.dev/net#Dialer).
+This package provides a `DialContext` implementation that plugs directly into HTTP transports, gRPC clients, or any custom connection pools expecting [net.Dialer](https://pkg.go.dev/net#Dialer).
 
 ## How it works
 
-Built on [miekg/dns](https://pkg.go.dev/github.com/miekg/dns), dnsdialer implements the same `DialContext` signature as `net.Dialer`, making it a drop-in replacement for any Go code that accepts a custom dialer (HTTP clients, gRPC, etc.).
+Built on [miekg/dns](https://pkg.go.dev/github.com/miekg/dns), dnsdialer implements the same `DialContext` signature as [net.Dialer](https://pkg.go.dev/net#Dialer), making it a drop-in replacement for any Go code that accepts a custom dialer (HTTP clients, gRPC, etc.).
 
 The only difference: instead of using your system DNS resolver, it queries multiple DNS servers using your chosen strategy.
 
 ## Performance
 
-The standard library's net.Dialer relies on OS-level DNS caching (mDNSResponder on macOS, systemd-resolved on Linux), which provides sub-millisecond lookups once cached. dnsdialer has its own in-process LRU cache to avoid shared global state and maintain explicit control over TTL bounds. By caching parsed [net.IP](https://pkg.go.dev/net#IP) slices instead of raw DNS strings, you get similar dial latency with reduced per-lookup allocations.
+The standard library's [net.Dialer](https://pkg.go.dev/net#Dialer) relies on OS-level DNS caching (mDNSResponder on macOS, systemd-resolved on Linux), which provides sub-millisecond lookups once cached. dnsdialer has its own in-process LRU cache to avoid shared global state and maintain explicit control over TTL bounds. By caching parsed [net.IP](https://pkg.go.dev/net#IP) slices instead of raw DNS strings, you get similar dial latency with reduced per-lookup allocations.
 
 ```console
 go test -bench='^BenchmarkStdLib_DialContext$|^BenchmarkDNSDialer_DialContext_Cache_Single_Race$' -benchtime=5s -benchmem -run=^$
