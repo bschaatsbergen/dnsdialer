@@ -3,6 +3,9 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/bschaatsbergen/dnsdialer.svg)](https://pkg.go.dev/github.com/bschaatsbergen/dnsdialer)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bschaatsbergen/dnsdialer)](https://goreportcard.com/report/bschaatsbergen/dnsdialer)
 
+> [!CAUTION]
+> dnsdialer is under active development and requires further performance testing before production use.
+
 This package allows you to take control of DNS resolution behavior through configurable multi-resolver strategies.
 
 Why you'd want multiple resolvers: Redundancy (primary resolver failure doesn't cascade into total DNS outage). Performance (concurrent queries across resolvers, returning fastest response). Security (consensus validation across independent resolvers mitigates poisoning and MITM attacks). Integrity (cross-resolver validation detects poisoning, cache corruption, and configuration drift before propagation).
