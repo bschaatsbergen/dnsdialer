@@ -12,18 +12,28 @@ import (
 	"time"
 )
 
-// BenchmarkCGOStatus_Info displays the current CGO configuration.
+// This is just a convenience bench test to report CGO status in benchmarks.
+// If the Go compiler is invoked with CGO_ENABLED=1, cgoStatus will be
+// "WithCGO". if CGO_ENABLED=0, it will be "NoCGO".
+//
+// This helps interpret benchmark results when ran.
 func BenchmarkCGOStatus_Info(b *testing.B) {
 	b.Logf("CGO Status: %s", cgoStatus)
 }
 
-// BenchmarkCGO_StdLib_LookupHost benchmarks the standard library's DNS lookup.
-// With CGO enabled (default), uses getaddrinfo() and OS caching (mDNSResponder/systemd-resolved).
-// With CGO disabled, uses pure Go DNS resolver.
 func BenchmarkCGO_StdLib_LookupHost(b *testing.B) {
 	resolver := &net.Resolver{}
 
-	// Warmup to prime cache (OS cache with CGO, or DNS server cache without CGO)
+	// To avoid measuring cold-start effects, we do a warmup lookup first.
+	// This ensures any internal caches are primed before the benchmark runs.
+	//
+	// When CGO is enabled, this primes the OS DNS cache (mDNSResponder on
+	// macOS, systemd-resolved on Linux), providing a fairer comparison to
+	// dnsdialer's internal caching.
+	//
+	// When CGO is disabled, there isn't any internal caching in the standard
+	// library resolver, it always does fresh DNS queries to the configured
+	// DNS servers, so at best this primes any DNS server caches upstream.
 	if _, err := resolver.LookupHost(context.Background(), "www.google.com"); err != nil {
 		b.Fatalf("warmup failed: %v", err)
 	}
@@ -36,8 +46,6 @@ func BenchmarkCGO_StdLib_LookupHost(b *testing.B) {
 	}
 }
 
-// BenchmarkCGO_DNSDialer_LookupHost benchmarks dnsdialer's DNS lookup with in-memory cache.
-// Cache behavior is identical regardless of CGO status.
 func BenchmarkCGO_DNSDialer_LookupHost(b *testing.B) {
 	ctx := context.Background()
 	dialer := New(
@@ -46,7 +54,17 @@ func BenchmarkCGO_DNSDialer_LookupHost(b *testing.B) {
 		WithCache(1000, 1*time.Second, 5*time.Minute),
 	)
 
-	// Warmup to prime in-memory LRU cache
+	// Similar to the standard library benchmark, we do a warmup lookup
+	// first. This primes dnsdialer's internal cache before the benchmark
+	// runs.
+	//
+	// This ensures we're measuring cached lookups in the benchmark,
+	// providing a fair comparison to the standard library benchmark when CGO
+	// is enabled (which benefits from OS-level caching).
+	//
+	// When CGO is disabled, the standard library doesn't cache lookups,
+	// which means this benchmark should always be much faster than the
+	// standard library benchmark with CGO disabled.
 	if _, err := dialer.lookupIPs(ctx, "www.google.com"); err != nil {
 		b.Fatalf("warmup failed: %v", err)
 	}
