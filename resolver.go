@@ -44,6 +44,9 @@ type Dialer struct {
 
 	// dialer is reused for TCP/UDP connections
 	dialer *net.Dialer
+
+	// cache stores DNS lookup results with TTL-based expiration
+	cache *dnsCache
 }
 
 // Logger provides structured logging throughout the resolution process.
@@ -78,6 +81,7 @@ func (noopLogger) Error(msg string, err error, fields ...Field) {}
 //   - Pool size: 4 connections per resolver
 //   - Query types: [A, AAAA] (IPv4 and IPv6)
 //   - Resolvers: none (must be set via WithResolvers)
+//   - Cache: disabled (can be enabled via WithCache)
 //
 // Example:
 //
@@ -85,6 +89,7 @@ func (noopLogger) Error(msg string, err error, fields ...Field) {}
 //	    WithResolvers("8.8.8.8", "1.1.1.1"),
 //	    WithStrategy(Consensus{MinAgreement: 2}),
 //	    WithTimeout(5 * time.Second),
+//	    WithCache(1000, 1*time.Second, 5*time.Minute),
 //	)
 func New(opts ...Option) *Dialer {
 	r := &Dialer{
@@ -93,6 +98,7 @@ func New(opts ...Option) *Dialer {
 		logger:   noopLogger{},
 		poolSize: 4,
 		dialer:   &net.Dialer{},
+		cache:    newDNSCache(0, 0, 0), // disabled by default
 	}
 
 	for _, opt := range opts {
@@ -155,13 +161,26 @@ func (r *Dialer) lookup(ctx context.Context, host string) ([]Record, error) {
 
 // lookupIPs extracts IP addresses from DNS records.
 func (r *Dialer) lookupIPs(ctx context.Context, host string) ([]net.IP, error) {
+	// Fast path: check IP cache first (avoids string parsing)
+	if cached := r.cache.getIPs(host); cached != nil {
+		r.logger.Debug("IP cache hit",
+			Field{"host", host},
+			Field{"ips", len(cached)})
+		return cached, nil
+	}
+
+	r.logger.Debug("IP cache miss",
+		Field{"host", host})
+
+	// Cache miss - perform DNS lookup
 	records, err := r.lookup(ctx, host)
 	if err != nil {
 		return nil, err
 	}
 
-	// Pre-allocate assuming most/all records will be A or AAAA
+	// Extract IPs and find minimum TTL for caching
 	ips := make([]net.IP, 0, len(records))
+	minTTL := uint32(300) // Default 5 minutes if no TTL found
 
 	for _, record := range records {
 		// Only extract IP addresses from A and AAAA records
@@ -169,6 +188,10 @@ func (r *Dialer) lookupIPs(ctx context.Context, host string) ([]net.IP, error) {
 			ip := net.ParseIP(record.Value)
 			if ip != nil {
 				ips = append(ips, ip)
+				// Track minimum TTL for cache expiration
+				if record.TTL < minTTL {
+					minTTL = record.TTL
+				}
 			}
 		}
 	}
@@ -176,6 +199,9 @@ func (r *Dialer) lookupIPs(ctx context.Context, host string) ([]net.IP, error) {
 	if len(ips) == 0 {
 		return nil, fmt.Errorf("no IP addresses found for %s", host)
 	}
+
+	// Cache the IPs for future lookups (bypasses string parsing overhead)
+	r.cache.setIPs(host, ips, time.Duration(minTTL)*time.Second)
 
 	return ips, nil
 }
