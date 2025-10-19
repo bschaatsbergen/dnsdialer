@@ -3,15 +3,17 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/bschaatsbergen/dnsdialer.svg)](https://pkg.go.dev/github.com/bschaatsbergen/dnsdialer)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bschaatsbergen/dnsdialer)](https://goreportcard.com/report/bschaatsbergen/dnsdialer)
 
-A `net.Dialer.DialContext` replacement with deterministic DNS resolution strategies.
+This package allows you to take control of DNS resolution behavior through configurable multi-resolver strategies.
 
-Implement concurrent races for minimum latency, consensus validation for poisoning detection, or ordered fallback for resolver diversity. Built on [miekg/dns](https://pkg.go.dev/github.com/miekg/dns) with sub-resolver control over timeout behavior, retry logic, and response validation.
+Why you'd want multiple resolvers: Redundancy (primary resolver failure doesn't cascade into total DNS outage). Performance (concurrent queries across resolvers, returning fastest response). Security (consensus validation across independent resolvers mitigates poisoning and MITM attacks). Integrity (cross-resolver validation detects poisoning, cache corruption, and configuration drift before propagation).
 
-Useful for systems where DNS resolution latency impacts P99 response times and DNS failures cascade into service outages. Drop into any `DialContext` call in HTTP transports, gRPC clients, or custom connection pools.
+Most OS-level DNS stacks already support multiple resolvers, but they don't use them in parallel, they typically try the first, then fail over in sequence (which can be slow if the first resolver hangs). In high-throughput systems where single-digit millisecond DNS latency affects tail latencies and resolver failures propagate into cascading outages, you need deterministic multi-resolver behavior.
+
+This package provides a `DialContext` implementation that plugs directly into HTTP transports, gRPC clients, or any custom connection pools expecting [`net.Dialer`](https://pkg.go.dev/net#Dialer).
 
 ## How it works
 
-dnsdialer implements the same `DialContext` signature as `net.Dialer`, making it a drop-in replacement for any Go code that accepts a custom dialer (HTTP clients, gRPC, etc.).
+Built on [miekg/dns](https://pkg.go.dev/github.com/miekg/dns), dnsdialer implements the same `DialContext` signature as `net.Dialer`, making it a drop-in replacement for any Go code that accepts a custom dialer (HTTP clients, gRPC, etc.).
 
 The only difference: instead of using your system DNS resolver, it queries multiple DNS servers using your chosen strategy.
 
