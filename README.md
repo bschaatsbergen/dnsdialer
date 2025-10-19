@@ -3,9 +3,6 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/bschaatsbergen/dnsdialer.svg)](https://pkg.go.dev/github.com/bschaatsbergen/dnsdialer)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bschaatsbergen/dnsdialer)](https://goreportcard.com/report/bschaatsbergen/dnsdialer)
 
-> [!CAUTION]
-> dnsdialer is under active development and requires further performance testing before production use.
-
 This package allows you to take control of DNS resolution behavior through configurable multi-resolver strategies.
 
 Why you'd want multiple resolvers: Redundancy (primary resolver failure doesn't cascade into total DNS outage). Performance (concurrent queries across resolvers, returning fastest response). Security (consensus validation across independent resolvers mitigates poisoning and MITM attacks). Integrity (cross-resolver validation detects poisoning, cache corruption, and configuration drift before propagation).
@@ -27,7 +24,7 @@ The only difference: instead of using your system DNS resolver, it queries multi
 The standard library's [net.Dialer](https://pkg.go.dev/net#Dialer) relies on OS-level DNS caching (mDNSResponder on macOS, systemd-resolved on Linux), which provides sub-millisecond lookups once cached. dnsdialer has its own in-process LRU cache to avoid shared global state and maintain explicit control over TTL bounds. By caching parsed [net.IP](https://pkg.go.dev/net#IP) slices instead of raw DNS strings, you get similar dial latency with reduced per-lookup allocations.
 
 ```console
-go test -bench='^BenchmarkStdLib_DialContext$|^BenchmarkDNSDialer_DialContext_Cache_Single_Race$' -benchtime=5s -benchmem -run=^$
+go test -bench='^BenchmarkStdLib_DialContext$|^BenchmarkDNSDialer_DialContext_Cache_Single_Race$' -run=^$ -benchtime=5s -benchmem
 goos: darwin
 goarch: arm64
 pkg: github.com/bschaatsbergen/dnsdialer
@@ -36,6 +33,20 @@ BenchmarkStdLib_DialContext-10                               360          167353
 BenchmarkDNSDialer_DialContext_Cache_Single_Race-10          354          16519391 ns/op             936 B/op         21 allocs/op
 PASS
 ok      github.com/bschaatsbergen/dnsdialer     12.114s
+```
+
+The standard library's DNS resolver implementation varies by CGO status: with CGO enabled (default), it uses [getaddrinfo()](https://man7.org/linux/man-pages/man3/getaddrinfo.3.html) for system resolver integration and OS-level caching (mDNSResponder on macOS, systemd-resolved on Linux). With CGO disabled, it uses a [pure Go](https://github.com/golang/go/blob/master/src/net/lookup_unix.go#L58) DNS implementation that queries DNS servers directly. Both configurations rely on external caching (OS cache or upstream resolver cache), while dnsdialer provides deterministic in-memory caching regardless of build configuration. Benchmarks compare both configurations with primed caches:
+
+```console
+CGO_ENABLED=0 go test -bench=CGO -run=^ -benchtime=5s -benchmem
+goos: darwin
+goarch: arm64
+pkg: github.com/bschaatsbergen/dnsdialer
+cpu: Apple M4
+BenchmarkCGO_StdLib_DialContext-10                   363          16641334 ns/op
+BenchmarkCGO_DNSDialer_DialContext-10                363          16627420 ns/op
+PASS
+ok      github.com/bschaatsbergen/dnsdialer     12.343s
 ```
 
 ## Usage
@@ -63,10 +74,8 @@ resp, err := client.Get("https://api.github.com")
 ```go
 dialer := dnsdialer.New(
     dnsdialer.WithResolvers("8.8.8.8:53", "1.1.1.1:53"),
-    dnsdialer.WithStrategy(dnsdialer.Consensus{
-        MinAgreement: 2,
-        IgnoreTTL:    true,
-    }),
+    dnsdialer.WithStrategy(dnsdialer.Race{}),
+    dnsdialer.WithCache(1000, 1*time.Second, 5*time.Minute),
 )
 
 conn, err := grpc.Dial(
