@@ -12,7 +12,7 @@ Why you'd want multiple resolvers: Redundancy (primary resolver failure doesn't 
 
 Most OS-level DNS stacks already support multiple resolvers, but they don't use them in parallel, they typically try the first, then fail over in sequence (which can be slow if the first resolver hangs). In high-throughput systems where single-digit millisecond DNS latency affects tail latencies and resolver failures propagate into cascading outages, you need deterministic multi-resolver behavior.
 
-While OS-level DNS caching (mDNSResponder on macOS, systemd-resolved on Linux) provides fast lookups, this package currently does not leverage OS caching. This package currently queries resolvers directly without caching. An LRU cache implementation is in progress.
+While OS-level DNS caching (mDNSResponder on macOS, systemd-resolved on Linux) provides sub-millisecond lookups, this package bypasses it by default to ensure fresh results for redundancy and consensus validation. Optional LRU caching with TTL-aware expiration is available via `WithCache()` to reduce latency on repeated lookups while maintaining explicit control over cache size and TTL bounds.
 
 This package provides a `DialContext` implementation that plugs directly into HTTP transports, gRPC clients, or any custom connection pools expecting [`net.Dialer`](https://pkg.go.dev/net#Dialer).
 
@@ -30,6 +30,7 @@ The only difference: instead of using your system DNS resolver, it queries multi
 dialer := dnsdialer.New(
     dnsdialer.WithResolvers("8.8.8.8:53", "1.1.1.1:53"),
     dnsdialer.WithStrategy(dnsdialer.Race{}),
+    dnsdialer.WithCache(1000, 1*time.Second, 5*time.Minute),
 )
 
 client := &http.Client{

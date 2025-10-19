@@ -120,3 +120,29 @@ func WithConnPoolSize(size int) Option {
 		}
 	}
 }
+
+// WithCache enables DNS response caching with TTL-aware expiration.
+//
+// Caching reduces query latency for repeated lookups and load on DNS servers.
+// The cache respects DNS TTL values from responses, clamped between minTTL and maxTTL.
+//
+// Parameters:
+//   - size: Maximum number of hostnames to cache (LRU eviction when full)
+//   - minTTL: Minimum TTL for cache entries (prevents caching very short TTLs)
+//   - maxTTL: Maximum TTL for cache entries (prevents indefinite caching)
+//
+// The cache mimics OS-level DNS caching behavior while providing explicit control
+// over cache size, TTL bounds, and invalidation.
+//
+// Example:
+//
+//	// Cache up to 1000 hostnames, with TTL between 1s and 5 minutes
+//	dialer := New(
+//	    WithResolvers("8.8.8.8", "1.1.1.1"),
+//	    WithCache(1000, 1*time.Second, 5*time.Minute),
+//	)
+func WithCache(size int, minTTL, maxTTL time.Duration) Option {
+	return func(r *Dialer) {
+		r.cache = newDNSCache(size, minTTL, maxTTL)
+	}
+}
