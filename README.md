@@ -17,7 +17,7 @@ This package provides a `DialContext` implementation that plugs directly into HT
 
 Built on [miekg/dns](https://pkg.go.dev/github.com/miekg/dns), dnsdialer implements the same `DialContext` signature as [net.Dialer](https://pkg.go.dev/net#Dialer), making it a drop-in replacement for any Go code that accepts a custom dialer (HTTP clients, gRPC, etc.).
 
-The only difference: instead of using your system DNS resolver, it queries multiple DNS servers using your chosen strategy.
+The only difference: instead of using your system DNS resolver, it queries multiple DNS resolvers using your chosen strategy.
 
 ## Performance
 
@@ -35,7 +35,7 @@ PASS
 ok      github.com/bschaatsbergen/dnsdialer     12.114s
 ```
 
-The standard library's DNS resolver implementation varies by CGO status: with CGO enabled (default), it uses [getaddrinfo()](https://man7.org/linux/man-pages/man3/getaddrinfo.3.html) which requires a system call and inter-process communication to the OS DNS cache (mDNSResponder on macOS, systemd-resolved on Linux) for every lookup. With CGO disabled, it uses a [pure Go](https://github.com/golang/go/blob/master/src/net/lookup_unix.go#L58) DNS implementation that sends queries directly to DNS servers for every lookup. dnsdialer maintains deterministic in-memory caching regardless of build configuration, providing much faster lookups by eliminating external communication overhead (system calls, inter-process communication, or network round-trips):
+The standard library's DNS resolver implementation varies by CGO status: with CGO enabled (default), it uses [getaddrinfo()](https://man7.org/linux/man-pages/man3/getaddrinfo.3.html) which requires a system call and inter-process communication to the OS DNS cache (mDNSResponder on macOS, systemd-resolved on Linux) for every lookup. With CGO disabled, it uses a [pure Go](https://github.com/golang/go/blob/master/src/net/lookup_unix.go#L58) DNS implementation that sends queries directly to DNS resolvers for every lookup. dnsdialer maintains deterministic in-memory caching regardless of build configuration, providing much faster lookups by eliminating external communication overhead (system calls, inter-process communication, or network round-trips):
 
 ```console
 CGO_ENABLED=0 go test -bench=CGO -run=^ -benchtime=5s -benchmem
@@ -129,7 +129,7 @@ dialer := dnsdialer.New(
 ### Compare
 
 Queries all servers and detects discrepancies, calling a user-provided callback when differences are found.
-Useful for monitoring DNS server integrity.
+Useful for monitoring DNS resolver integrity.
 
 ```go
 dialer := dnsdialer.New(

@@ -13,7 +13,7 @@ import (
 func (s Race) ResolveType(ctx context.Context, host string, qtype RecordType, resolvers []resolver, logger Logger) ([]Record, error) {
 	// Create a cancellable context so we can stop in-flight queries once we get
 	// a successful response. This prevents unnecessary network traffic and reduces
-	// load on DNS servers.
+	// load on DNS resolvers.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

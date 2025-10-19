@@ -19,7 +19,7 @@ import (
 // It uses connection pooling to reduce socket allocation overhead and supports
 // context-based deadlines for timeout control.
 type udpResolver struct {
-	// addr is the DNS server address with port (e.g., "8.8.8.8:53")
+	// addr is the DNS resolver address with port (e.g., "8.8.8.8:53")
 	addr string
 
 	// timeout is the default timeout we use if the context has no deadline set
@@ -33,7 +33,7 @@ type udpResolver struct {
 }
 
 func newUDPResolver(addr string, timeout time.Duration, poolSize int) *udpResolver {
-	// Ensure the address includes a port. DNS servers typically listen on port 53.
+	// Ensure the address includes a port. DNS resolvers typically listen on port 53.
 	// This lets users specify just "8.8.8.8" instead of requiring "8.8.8.8:53".
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		addr = net.JoinHostPort(addr, "53")
@@ -156,7 +156,7 @@ func (r *udpResolver) ResolveType(ctx context.Context, host string, qtype Record
 		records = append(records, record)
 	}
 
-	// Some DNS servers return RcodeSuccess with an empty answer section when a record
+	// Some DNS resolvers return RcodeSuccess with an empty answer section when a record
 	// exists but has no data (e.g., a domain with no A records). We treat this as an
 	// error rather than returning an empty slice, to distinguish it from never calling
 	// this function vs calling it and getting nothing.

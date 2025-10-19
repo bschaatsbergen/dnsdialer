@@ -33,7 +33,7 @@ func BenchmarkCGO_StdLib_LookupHost(b *testing.B) {
 	//
 	// When CGO is disabled, there isn't any internal caching in the standard
 	// library resolver, it always does fresh DNS queries to the configured
-	// DNS servers, so at best this primes any DNS server caches upstream.
+	// DNS resolvers, so at best this primes any DNS resolver caches upstream.
 	if _, err := resolver.LookupHost(context.Background(), "www.google.com"); err != nil {
 		b.Fatalf("warmup failed: %v", err)
 	}

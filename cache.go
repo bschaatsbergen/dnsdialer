@@ -38,7 +38,7 @@ type dnsCache struct {
 	// For example, setting this to 1s means we won't bother caching a record with TTL=0.
 	minTTL time.Duration
 
-	// maxTTL caps how long we'll cache an entry, regardless of what the DNS server tells us.
+	// maxTTL caps how long we'll cache an entry, regardless of what the DNS resolver tells us.
 	// This ensures we periodically re-validate even if the server sends a very high TTL.
 	maxTTL time.Duration
 }
@@ -103,7 +103,7 @@ func (c *dnsCache) setIPs(host string, ips []net.IP, ttl time.Duration) {
 		return
 	}
 
-	// Clamp TTL to our configured bounds, don't trust DNS servers too much.
+	// Clamp TTL to our configured bounds, don't trust DNS resolvers too much.
 	if ttl < c.minTTL {
 		ttl = c.minTTL
 	}

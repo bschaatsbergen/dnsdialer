@@ -32,7 +32,7 @@ type resolver interface {
 // enabling improved reliability, performance, or security compared to single-resolver
 // approaches.
 type Dialer struct {
-	// resolvers is the list of DNS servers we'll query (e.g., UDP resolvers for 8.8.8.8, 1.1.1.1)
+	// resolvers is the list of DNS resolvers we'll query (e.g., UDP resolvers for 8.8.8.8, 1.1.1.1)
 	resolvers []resolver
 
 	// strategy determines how we coordinate queries (Race, Fallback, Consensus, Compare)
@@ -151,7 +151,7 @@ func (r *Dialer) lookup(ctx context.Context, host string) ([]Record, error) {
 		res := <-results
 		if res.err != nil {
 			// Don't fail the entire lookup if one record type fails. For example, a host
-			// might have A records but no AAAA records, and some DNS servers report that
+			// might have A records but no AAAA records, and some DNS resolvers report that
 			// as an error rather than an empty result.
 			r.logger.Debug("query type failed",
 				Field{"type", res.qtype.String()},

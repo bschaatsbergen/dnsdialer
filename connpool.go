@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// connPool manages a pool of reusable UDP connections to a single DNS server.
+// connPool manages a pool of reusable UDP connections to a single DNS resolver.
 //
 // Connection pooling reduces the overhead of socket creation/destruction for
 // high-throughput DNS resolution. Each pool maintains up to 'size' connections,
@@ -20,7 +20,7 @@ import (
 // Concurrency: The pool is safe for concurrent access. Multiple goroutines can
 // Get and Put connections simultaneously.
 type connPool struct {
-	// addr is the DNS server address we're pooling connections for (e.g., "8.8.8.8:53")
+	// addr is the DNS resolver address we're pooling connections for (e.g., "8.8.8.8:53")
 	addr string
 
 	// timeout is the connection timeout for creating new connections

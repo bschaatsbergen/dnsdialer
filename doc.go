@@ -6,7 +6,7 @@
 // Package dnsdialer provides a drop-in replacement for net.Dialer with configurable
 // DNS resolution strategies.
 //
-// Instead of using your system's DNS resolver, dnsdialer queries multiple DNS servers
+// Instead of using your system's DNS resolver, dnsdialer queries multiple DNS resolvers
 // using your chosen strategy (Race, Fallback, Consensus, or Compare).
 //
 // # Usage

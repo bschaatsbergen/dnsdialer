@@ -16,7 +16,7 @@ import "time"
 // 4. Clear intent - each option function name documents what it does
 type Option func(*Dialer)
 
-// WithResolvers sets the DNS servers to query.
+// WithResolvers sets the DNS resolvers to query.
 //
 // Each address can be:
 // - IP with port: "8.8.8.8:53"
@@ -87,7 +87,7 @@ func WithTimeout(d time.Duration) Option {
 //
 // The logger receives structured log events about query attempts, failures,
 // strategy decisions, and performance metrics. Useful for debugging resolution
-// issues or monitoring DNS server health.
+// issues or monitoring DNS resolver health.
 //
 // Default is a no-op logger that discards all log messages.
 //
@@ -105,7 +105,7 @@ func WithLogger(l Logger) Option {
 
 // WithConnPoolSize sets the maximum number of pooled connections per resolver.
 //
-// Connection pooling reduces socket creation/destruction overhead. Each DNS server
+// Connection pooling reduces socket creation/destruction overhead. Each DNS resolver
 // gets its own pool. Higher values reduce the chance of creating new connections
 // under load, but consume more file descriptors.
 //
@@ -128,7 +128,7 @@ func WithConnPoolSize(size int) Option {
 
 // WithCache enables DNS response caching with TTL-aware expiration.
 //
-// Caching reduces query latency for repeated lookups and load on DNS servers.
+// Caching reduces query latency for repeated lookups and load on DNS resolvers.
 // The cache respects DNS TTL values from responses, clamped between minTTL and maxTTL.
 //
 // Parameters:
