@@ -38,15 +38,14 @@ ok      github.com/bschaatsbergen/dnsdialer     12.114s
 The standard library's DNS resolver implementation varies by CGO status: with CGO enabled (default), it uses [getaddrinfo()](https://man7.org/linux/man-pages/man3/getaddrinfo.3.html) which requires a system call and inter-process communication to the OS DNS cache (mDNSResponder on macOS, systemd-resolved on Linux) for every lookup. With CGO disabled, it uses a [pure Go](https://github.com/golang/go/blob/master/src/net/lookup_unix.go#L58) DNS implementation that sends queries directly to DNS resolvers for every lookup. dnsdialer maintains deterministic in-memory caching regardless of build configuration, providing much faster lookups by eliminating external communication overhead (system calls, inter-process communication, or network round-trips):
 
 ```console
-CGO_ENABLED=0 go test -bench=CGO -run=^ -benchtime=5s -benchmem
 goos: darwin
 goarch: arm64
 pkg: github.com/bschaatsbergen/dnsdialer
 cpu: Apple M4
-BenchmarkCGO_StdLib_LookupHost-10                  24800            239726 ns/op
-BenchmarkCGO_DNSDialer_LookupHost-10            53563477             107.3 ns/op
+BenchmarkCGO_StdLib_LookupHost-10                  26244            226596 ns/op             348 B/op         11 allocs/op
+BenchmarkCGO_DNSDialer_LookupHost-10            58951063            103.6 ns/op              128 B/op          3 allocs/op
 PASS
-ok      github.com/bschaatsbergen/dnsdialer     12.343s
+ok      github.com/bschaatsbergen/dnsdialer     12.401s
 ```
 
 ## Usage
