@@ -43,8 +43,8 @@ goos: darwin
 goarch: arm64
 pkg: github.com/bschaatsbergen/dnsdialer
 cpu: Apple M4
-BenchmarkCGO_StdLib_DialContext-10                   363          16641334 ns/op
-BenchmarkCGO_DNSDialer_DialContext-10                363          16627420 ns/op
+BenchmarkCGO_StdLib_LookupHost-10                  24800            239726 ns/op
+BenchmarkCGO_DNSDialer_LookupHost-10            53563477             107.3 ns/op
 PASS
 ok      github.com/bschaatsbergen/dnsdialer     12.343s
 ```
