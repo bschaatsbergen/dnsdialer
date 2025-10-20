@@ -14,8 +14,66 @@ documentation:
   - changed-files:
       - any-glob-to-any-file:
           - "README.md"
+          - "doc.go"
+          - "**/*.md"
 
 tests:
   - changed-files:
       - any-glob-to-any-file:
           - "**/*_test.go"
+
+benchmarks:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "benchmark_test.go"
+          - "*benchmark_test.go"
+
+strategy:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "strategy.go"
+          - "race.go"
+          - "fallback.go"
+          - "consensus.go"
+          - "compare.go"
+          - "strategy_test.go"
+
+resolver:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "resolver.go"
+          - "resolvers.go"
+          - "resolver_test.go"
+          - "resolvers_test.go"
+          - "udp.go"
+
+cache:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "cache.go"
+
+recordtype:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "recordtype.go"
+
+options:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "options.go"
+
+connpool:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "connpool.go"
+
+utilities:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "util.go"
+          - "util_test.go"
+
+cgo:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "cgo_*.go"
