@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/miekg/dns v1.1.69
+	github.com/miekg/dns v1.1.72
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.80.0
 )
